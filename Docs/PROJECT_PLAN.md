@@ -4,7 +4,7 @@
 **Project Name**: HydroGrow Simulator  
 **Genre**: Educational Simulation/Management  
 **Platform**: PC (Windows/Mac), Console (future)  
-**Engine**: Unreal Engine 5.4  
+**Engine**: Unreal Engine 5.5  
 **Languages**: C++ (core systems), Blueprint (gameplay/UI)  
 **Timeline**: 8-10 months for MVP  
 

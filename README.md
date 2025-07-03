@@ -28,7 +28,7 @@ Architecture, systems design, and UE5 implementation details.
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Unreal Engine 5.3+ (5.4 recommended)
+- Unreal Engine 5.5+ (5.5 recommended)
 - Visual Studio 2022 (Windows) or Xcode (Mac)
 - Git for version control
 - Git LFS for asset management

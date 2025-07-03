@@ -17,7 +17,7 @@
 **Genre**: Educational Simulation/Management  
 **Target Audience**: Casual gamers interested in gardening, students, hydroponics enthusiasts  
 **Platform**: PC (Steam/Epic), Console (planned)  
-**Engine**: Unreal Engine 5.4  
+**Engine**: Unreal Engine 5.5  
 **Monetization**: Premium ($19.99), optional cosmetic DLC  
 
 ### Core Gameplay Loop
