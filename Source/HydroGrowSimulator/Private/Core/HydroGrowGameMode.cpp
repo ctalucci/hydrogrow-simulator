@@ -5,6 +5,8 @@
 #include "Systems/TimeManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+#include "Engine/PlayerStartPIE.h"
+#include "GameFramework/PlayerStart.h"
 
 AHydroGrowGameMode::AHydroGrowGameMode()
 {
@@ -142,6 +144,37 @@ void AHydroGrowGameMode::InitializeNewGame()
 	EnergyCredits = DailyEnergyCredits;
 	
 	UE_LOG(LogTemp, Warning, TEXT("New game initialized"));
+}
+
+AActor* AHydroGrowGameMode::ChoosePlayerStart_Implementation(AController* Player)
+{
+	// Try to find a player start
+	AActor* PlayerStart = Super::ChoosePlayerStart_Implementation(Player);
+	
+	if (PlayerStart)
+	{
+		return PlayerStart;
+	}
+	
+	// If no player start found, create a default spawn location
+	UE_LOG(LogTemp, Warning, TEXT("No PlayerStart found, using default spawn location"));
+	
+	// Return nullptr to use default spawn location (0,0,0)
+	return nullptr;
+}
+
+APawn* AHydroGrowGameMode::SpawnDefaultPawnFor_Implementation(AController* NewPlayer, AActor* StartSpot)
+{
+	APawn* NewPawn = Super::SpawnDefaultPawnFor_Implementation(NewPlayer, StartSpot);
+	
+	if (AHydroGrowCharacter* Character = Cast<AHydroGrowCharacter>(NewPawn))
+	{
+		// Set up the character with default values
+		Character->SetPlayerName(TEXT("Player"));
+		UE_LOG(LogTemp, Warning, TEXT("Spawned HydroGrow Character: %s"), *Character->GetName());
+	}
+	
+	return NewPawn;
 }
 
 void AHydroGrowGameMode::UpdateEnergyCredits(float DeltaTime)
