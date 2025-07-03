@@ -3,6 +3,7 @@
 #include "Engine/DataTable.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
+#include "GameFramework/GameUserSettings.h"
 
 UHydroGrowGameInstance::UHydroGrowGameInstance()
 {
@@ -54,6 +55,26 @@ const FEquipmentData* UHydroGrowGameInstance::GetEquipmentData(FName EquipmentID
 	}
 	
 	return EquipmentDataTable->FindRow<FEquipmentData>(EquipmentID, TEXT("EquipmentData"));
+}
+
+FPlantSpeciesData UHydroGrowGameInstance::GetPlantDataCopy(FName PlantID) const
+{
+	const FPlantSpeciesData* PlantData = GetPlantData(PlantID);
+	if (PlantData)
+	{
+		return *PlantData;
+	}
+	return FPlantSpeciesData();
+}
+
+FEquipmentData UHydroGrowGameInstance::GetEquipmentDataCopy(FName EquipmentID) const
+{
+	const FEquipmentData* EquipmentData = GetEquipmentData(EquipmentID);
+	if (EquipmentData)
+	{
+		return *EquipmentData;
+	}
+	return FEquipmentData();
 }
 
 TArray<FName> UHydroGrowGameInstance::GetUnlockedPlants(int32 PlayerLevel) const

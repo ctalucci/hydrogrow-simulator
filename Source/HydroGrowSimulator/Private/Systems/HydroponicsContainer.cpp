@@ -4,10 +4,29 @@
 #include "Components/BoxComponent.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
+#include "Net/UnrealNetwork.h"
+#include "Network/HydroGrowNetworkGameMode.h"
+#include "GameFramework/GameModeBase.h"
+
+// Network serialization for FPlantSlot
+bool FPlantSlot::NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess)
+{
+	Ar << bIsOccupied;
+	Ar << PlantActor;
+	Ar << SlotLocation;
+	Ar << SlotIndex;
+	Ar << PlantedByPlayerID;
+	
+	bOutSuccess = true;
+	return true;
+}
 
 AHydroponicsContainer::AHydroponicsContainer()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	bReplicates = true;
+	bAlwaysRelevant = true;
+	SetNetUpdateFrequency(10.0f);
 
 	// Create components
 	RootSceneComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
@@ -30,6 +49,10 @@ AHydroponicsContainer::AHydroponicsContainer()
 	bPumpRunning = false;
 	WaterFlowRate = 1.0f;
 	EnergyConsumptionRate = 0.0f;
+	
+	// Network defaults
+	OwnerPlayerID = TEXT("");
+	bIsSharedContainer = false;
 
 	// Configuration defaults
 	BaseEnergyConsumption = 10.0f;
@@ -64,12 +87,31 @@ AHydroponicsContainer::AHydroponicsContainer()
 	NutrientSolution.Zinc = 1.0f;
 }
 
+void AHydroponicsContainer::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	
+	DOREPLIFETIME_CONDITION(AHydroponicsContainer, ContainerType, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AHydroponicsContainer, PlantSlots, COND_None);
+	DOREPLIFETIME_CONDITION(AHydroponicsContainer, CurrentConditions, COND_None);
+	DOREPLIFETIME_CONDITION(AHydroponicsContainer, NutrientSolution, COND_None);
+	DOREPLIFETIME_CONDITION(AHydroponicsContainer, bPumpRunning, COND_None);
+	DOREPLIFETIME_CONDITION(AHydroponicsContainer, OwnerPlayerID, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(AHydroponicsContainer, bIsSharedContainer, COND_None);
+}
+
+bool AHydroponicsContainer::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
+{
+	// Always relevant for all players in multiplayer sessions
+	return Super::IsNetRelevantFor(RealViewer, ViewTarget, SrcLocation);
+}
+
 void AHydroponicsContainer::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	// Start with pump running for most container types
-	if (ContainerType != EContainerType::DWC)
+	// Start with pump running for most container types (server only)
+	if (HasAuthority() && ContainerType != EContainerType::DWC)
 	{
 		StartWaterPump();
 	}
@@ -79,9 +121,15 @@ void AHydroponicsContainer::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	
-	UpdateEnvironmentalConditions(DeltaTime);
-	UpdateWaterSystem(DeltaTime);
-	UpdatePlantConditions();
+	// Only simulate on server
+	if (HasAuthority())
+	{
+		UpdateEnvironmentalConditions(DeltaTime);
+		UpdateWaterSystem(DeltaTime);
+		UpdatePlantConditions();
+	}
+	
+	// Visual effects on all clients
 	UpdateVisualEffects();
 }
 
@@ -133,11 +181,32 @@ bool AHydroponicsContainer::CanPlantSeed(int32 SlotIndex) const
 	return !PlantSlots[SlotIndex].bIsOccupied;
 }
 
-bool AHydroponicsContainer::PlantSeed(FName PlantSpeciesID, int32 SlotIndex)
+bool AHydroponicsContainer::PlantSeed(FName PlantSpeciesID, int32 SlotIndex, const FString& PlayerID)
+{
+	// Check permissions first
+	if (!PlayerID.IsEmpty() && !CanPlayerInteract(PlayerID, EContainerPermission::PlantSeeds))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Player %s doesn't have permission to plant seeds"), *PlayerID);
+		return false;
+	}
+	
+	if (HasAuthority())
+	{
+		Server_PlantSeed(PlantSpeciesID, SlotIndex, PlayerID);
+		return true;
+	}
+	else
+	{
+		Server_PlantSeed(PlantSpeciesID, SlotIndex, PlayerID);
+		return true; // Assume success on client
+	}
+}
+
+void AHydroponicsContainer::Server_PlantSeed_Implementation(FName PlantSpeciesID, int32 SlotIndex, const FString& PlayerID)
 {
 	if (!CanPlantSeed(SlotIndex))
 	{
-		return false;
+		return;
 	}
 	
 	// Spawn plant actor
@@ -153,21 +222,46 @@ bool AHydroponicsContainer::PlantSeed(FName PlantSpeciesID, int32 SlotIndex)
 		
 		PlantSlots[SlotIndex].bIsOccupied = true;
 		PlantSlots[SlotIndex].PlantActor = NewPlant;
+		PlantSlots[SlotIndex].PlantedByPlayerID = PlayerID;
 		
 		OnPlantAdded.Broadcast(NewPlant);
+		OnContainerInteraction.Broadcast(PlayerID, FString::Printf(TEXT("Planted %s"), *PlantSpeciesID.ToString()));
 		
-		UE_LOG(LogTemp, Warning, TEXT("Planted %s in slot %d"), *PlantSpeciesID.ToString(), SlotIndex);
-		return true;
+		UE_LOG(LogTemp, Warning, TEXT("Player %s planted %s in slot %d"), *PlayerID, *PlantSpeciesID.ToString(), SlotIndex);
 	}
-	
-	return false;
 }
 
-bool AHydroponicsContainer::RemovePlant(int32 SlotIndex)
+bool AHydroponicsContainer::Server_PlantSeed_Validate(FName PlantSpeciesID, int32 SlotIndex, const FString& PlayerID)
+{
+	return true;
+}
+
+bool AHydroponicsContainer::RemovePlant(int32 SlotIndex, const FString& PlayerID)
+{
+	// Check permissions
+	if (!PlayerID.IsEmpty() && !CanPlayerInteract(PlayerID, EContainerPermission::HarvestPlants))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Player %s doesn't have permission to remove plants"), *PlayerID);
+		return false;
+	}
+	
+	if (HasAuthority())
+	{
+		Server_RemovePlant(SlotIndex, PlayerID);
+		return true;
+	}
+	else
+	{
+		Server_RemovePlant(SlotIndex, PlayerID);
+		return true;
+	}
+}
+
+void AHydroponicsContainer::Server_RemovePlant_Implementation(int32 SlotIndex, const FString& PlayerID)
 {
 	if (SlotIndex < 0 || SlotIndex >= PlantSlots.Num() || !PlantSlots[SlotIndex].bIsOccupied)
 	{
-		return false;
+		return;
 	}
 	
 	if (PlantSlots[SlotIndex].PlantActor)
@@ -177,9 +271,14 @@ bool AHydroponicsContainer::RemovePlant(int32 SlotIndex)
 	
 	PlantSlots[SlotIndex].bIsOccupied = false;
 	PlantSlots[SlotIndex].PlantActor = nullptr;
+	PlantSlots[SlotIndex].PlantedByPlayerID = TEXT("");
 	
 	OnPlantRemoved.Broadcast(SlotIndex);
-	
+	OnContainerInteraction.Broadcast(PlayerID, TEXT("Removed plant"));
+}
+
+bool AHydroponicsContainer::Server_RemovePlant_Validate(int32 SlotIndex, const FString& PlayerID)
+{
 	return true;
 }
 
@@ -195,20 +294,68 @@ int32 AHydroponicsContainer::GetAvailableSlot() const
 	return -1;
 }
 
-void AHydroponicsContainer::SetPHLevel(float NewPH)
+void AHydroponicsContainer::SetPHLevel(float NewPH, const FString& PlayerID)
+{
+	if (!PlayerID.IsEmpty() && !CanPlayerInteract(PlayerID, EContainerPermission::AdjustEnvironment))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Player %s doesn't have permission to adjust pH"), *PlayerID);
+		return;
+	}
+	
+	if (HasAuthority())
+	{
+		Server_SetPHLevel(NewPH, PlayerID);
+	}
+	else
+	{
+		Server_SetPHLevel(NewPH, PlayerID);
+	}
+}
+
+void AHydroponicsContainer::Server_SetPHLevel_Implementation(float NewPH, const FString& PlayerID)
 {
 	CurrentConditions.PHLevel = FMath::Clamp(NewPH, 4.0f, 8.0f);
 	OnEnvironmentalChange.Broadcast(TEXT("pH"), CurrentConditions.PHLevel);
+	OnContainerInteraction.Broadcast(PlayerID, FString::Printf(TEXT("Adjusted pH to %.2f"), CurrentConditions.PHLevel));
 	
-	UE_LOG(LogTemp, Log, TEXT("pH adjusted to %.2f"), CurrentConditions.PHLevel);
+	UE_LOG(LogTemp, Log, TEXT("Player %s adjusted pH to %.2f"), *PlayerID, CurrentConditions.PHLevel);
 }
 
-void AHydroponicsContainer::SetECLevel(float NewEC)
+bool AHydroponicsContainer::Server_SetPHLevel_Validate(float NewPH, const FString& PlayerID)
+{
+	return NewPH >= 4.0f && NewPH <= 8.0f;
+}
+
+void AHydroponicsContainer::SetECLevel(float NewEC, const FString& PlayerID)
+{
+	if (!PlayerID.IsEmpty() && !CanPlayerInteract(PlayerID, EContainerPermission::AdjustEnvironment))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Player %s doesn't have permission to adjust EC"), *PlayerID);
+		return;
+	}
+	
+	if (HasAuthority())
+	{
+		Server_SetECLevel(NewEC, PlayerID);
+	}
+	else
+	{
+		Server_SetECLevel(NewEC, PlayerID);
+	}
+}
+
+void AHydroponicsContainer::Server_SetECLevel_Implementation(float NewEC, const FString& PlayerID)
 {
 	CurrentConditions.ECLevel = FMath::Clamp(NewEC, 0.0f, 4.0f);
 	OnEnvironmentalChange.Broadcast(TEXT("EC"), CurrentConditions.ECLevel);
+	OnContainerInteraction.Broadcast(PlayerID, FString::Printf(TEXT("Adjusted EC to %.2f"), CurrentConditions.ECLevel));
 	
-	UE_LOG(LogTemp, Log, TEXT("EC adjusted to %.2f"), CurrentConditions.ECLevel);
+	UE_LOG(LogTemp, Log, TEXT("Player %s adjusted EC to %.2f"), *PlayerID, CurrentConditions.ECLevel);
+}
+
+bool AHydroponicsContainer::Server_SetECLevel_Validate(float NewEC, const FString& PlayerID)
+{
+	return NewEC >= 0.0f && NewEC <= 4.0f;
 }
 
 void AHydroponicsContainer::SetWaterLevel(float NewLevel)
@@ -217,7 +364,25 @@ void AHydroponicsContainer::SetWaterLevel(float NewLevel)
 	OnEnvironmentalChange.Broadcast(TEXT("Water Level"), CurrentConditions.WaterLevel);
 }
 
-void AHydroponicsContainer::AddNutrients(const FNutrientLevels& Nutrients)
+void AHydroponicsContainer::AddNutrients(const FNutrientLevels& Nutrients, const FString& PlayerID)
+{
+	if (!PlayerID.IsEmpty() && !CanPlayerInteract(PlayerID, EContainerPermission::AddNutrients))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Player %s doesn't have permission to add nutrients"), *PlayerID);
+		return;
+	}
+	
+	if (HasAuthority())
+	{
+		Server_AddNutrients(Nutrients, PlayerID);
+	}
+	else
+	{
+		Server_AddNutrients(Nutrients, PlayerID);
+	}
+}
+
+void AHydroponicsContainer::Server_AddNutrients_Implementation(const FNutrientLevels& Nutrients, const FString& PlayerID)
 {
 	// Add nutrients to the solution
 	NutrientSolution.Nitrogen += Nutrients.Nitrogen;
@@ -239,10 +404,52 @@ void AHydroponicsContainer::AddNutrients(const FNutrientLevels& Nutrients)
 	float TotalNutrients = (NutrientSolution.Nitrogen + NutrientSolution.Phosphorus + NutrientSolution.Potassium) / 3.0f;
 	CurrentConditions.ECLevel = TotalNutrients * 1.5f;
 	
-	UE_LOG(LogTemp, Log, TEXT("Added nutrients, new EC: %.2f"), CurrentConditions.ECLevel);
+	OnContainerInteraction.Broadcast(PlayerID, TEXT("Added nutrients"));
+	UE_LOG(LogTemp, Log, TEXT("Player %s added nutrients, new EC: %.2f"), *PlayerID, CurrentConditions.ECLevel);
 }
 
-void AHydroponicsContainer::StartWaterPump()
+bool AHydroponicsContainer::Server_AddNutrients_Validate(const FNutrientLevels& Nutrients, const FString& PlayerID)
+{
+	return true;
+}
+
+void AHydroponicsContainer::StartWaterPump(const FString& PlayerID)
+{
+	if (!PlayerID.IsEmpty() && !CanPlayerInteract(PlayerID, EContainerPermission::OperateEquipment))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Player %s doesn't have permission to operate equipment"), *PlayerID);
+		return;
+	}
+	
+	if (HasAuthority())
+	{
+		Server_StartWaterPump(PlayerID);
+	}
+	else
+	{
+		Server_StartWaterPump(PlayerID);
+	}
+}
+
+void AHydroponicsContainer::StopWaterPump(const FString& PlayerID)
+{
+	if (!PlayerID.IsEmpty() && !CanPlayerInteract(PlayerID, EContainerPermission::OperateEquipment))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Player %s doesn't have permission to operate equipment"), *PlayerID);
+		return;
+	}
+	
+	if (HasAuthority())
+	{
+		Server_StopWaterPump(PlayerID);
+	}
+	else
+	{
+		Server_StopWaterPump(PlayerID);
+	}
+}
+
+void AHydroponicsContainer::Server_StartWaterPump_Implementation(const FString& PlayerID)
 {
 	if (ContainerType == EContainerType::DWC)
 	{
@@ -253,15 +460,27 @@ void AHydroponicsContainer::StartWaterPump()
 	bPumpRunning = true;
 	EnergyConsumptionRate = BaseEnergyConsumption + PumpEnergyConsumption;
 	
-	UE_LOG(LogTemp, Log, TEXT("Water pump started"));
+	OnContainerInteraction.Broadcast(PlayerID, TEXT("Started water pump"));
+	UE_LOG(LogTemp, Log, TEXT("Player %s started water pump"), *PlayerID);
 }
 
-void AHydroponicsContainer::StopWaterPump()
+bool AHydroponicsContainer::Server_StartWaterPump_Validate(const FString& PlayerID)
+{
+	return true;
+}
+
+void AHydroponicsContainer::Server_StopWaterPump_Implementation(const FString& PlayerID)
 {
 	bPumpRunning = false;
 	EnergyConsumptionRate = BaseEnergyConsumption;
 	
-	UE_LOG(LogTemp, Log, TEXT("Water pump stopped"));
+	OnContainerInteraction.Broadcast(PlayerID, TEXT("Stopped water pump"));
+	UE_LOG(LogTemp, Log, TEXT("Player %s stopped water pump"), *PlayerID);
+}
+
+bool AHydroponicsContainer::Server_StopWaterPump_Validate(const FString& PlayerID)
+{
+	return true;
 }
 
 int32 AHydroponicsContainer::GetPlantCount() const
@@ -352,7 +571,7 @@ void AHydroponicsContainer::CreatePlantSlots(int32 Capacity)
 	PlantSlots.SetNum(Capacity);
 	
 	// Arrange slots in a grid pattern
-	int32 SlotsPerRow = FMath::CeilToInt(FMath::Sqrt(Capacity));
+	int32 SlotsPerRow = FMath::CeilToInt(FMath::Sqrt(static_cast<float>(Capacity)));
 	float SlotSpacing = 30.0f; // cm between slots
 	
 	for (int32 i = 0; i < Capacity; i++)
@@ -427,4 +646,76 @@ void AHydroponicsContainer::SimulateWaterEvaporation(float DeltaTime)
 		// Reduced oxygen
 		CurrentConditions.OxygenLevel *= 0.9f;
 	}
+}
+
+// Network permission functions
+bool AHydroponicsContainer::CanPlayerInteract(const FString& PlayerID, EContainerPermission Permission) const
+{
+	if (PlayerID.IsEmpty())
+	{
+		return true; // Allow local/single player interactions
+	}
+	
+	// Container owner can always interact
+	if (OwnerPlayerID == PlayerID)
+	{
+		return true;
+	}
+	
+	// Check shared access
+	if (!bIsSharedContainer)
+	{
+		return false;
+	}
+	
+	// Use the game mode's permission system
+	return HasPermission(PlayerID, Permission);
+}
+
+void AHydroponicsContainer::SetContainerOwner(const FString& PlayerID)
+{
+	if (HasAuthority())
+	{
+		OwnerPlayerID = PlayerID;
+	}
+}
+
+void AHydroponicsContainer::SetSharedAccess(bool bShared)
+{
+	if (HasAuthority())
+	{
+		bIsSharedContainer = bShared;
+	}
+}
+
+class AHydroGrowNetworkGameMode* AHydroponicsContainer::GetNetworkGameMode() const
+{
+	if (UWorld* World = GetWorld())
+	{
+		return Cast<AHydroGrowNetworkGameMode>(World->GetAuthGameMode());
+	}
+	return nullptr;
+}
+
+bool AHydroponicsContainer::HasPermission(const FString& PlayerID, EContainerPermission Permission) const
+{
+	if (AHydroGrowNetworkGameMode* GameMode = GetNetworkGameMode())
+	{
+		switch (Permission)
+		{
+		case EContainerPermission::PlantSeeds:
+			return GameMode->HasPlayerPermission(PlayerID, TEXT("bCanPlantSeeds"));
+		case EContainerPermission::HarvestPlants:
+			return GameMode->HasPlayerPermission(PlayerID, TEXT("bCanHarvestPlants"));
+		case EContainerPermission::AdjustEnvironment:
+			return GameMode->HasPlayerPermission(PlayerID, TEXT("bCanAdjustEnvironment"));
+		case EContainerPermission::AddNutrients:
+			return GameMode->HasPlayerPermission(PlayerID, TEXT("bCanAddNutrients"));
+		case EContainerPermission::OperateEquipment:
+			return GameMode->HasPlayerPermission(PlayerID, TEXT("bCanOperateEquipment"));
+		default:
+			return false;
+		}
+	}
+	return true; // Default to allowing if no game mode
 }

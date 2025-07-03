@@ -19,9 +19,13 @@ public:
 	virtual void Init() override;
 
 	UFUNCTION(BlueprintCallable, Category = "Data")
-	const FPlantSpeciesData* GetPlantData(FName PlantID) const;
+	FPlantSpeciesData GetPlantDataCopy(FName PlantID) const;
 
 	UFUNCTION(BlueprintCallable, Category = "Data")
+	FEquipmentData GetEquipmentDataCopy(FName EquipmentID) const;
+	
+	// Non-Blueprint accessible versions that return pointers (for internal C++ use)
+	const FPlantSpeciesData* GetPlantData(FName PlantID) const;
 	const FEquipmentData* GetEquipmentData(FName EquipmentID) const;
 
 	UFUNCTION(BlueprintCallable, Category = "Data")

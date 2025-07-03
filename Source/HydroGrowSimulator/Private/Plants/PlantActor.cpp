@@ -82,12 +82,12 @@ void APlantActor::Tick(float DeltaTime)
 	}
 }
 
-void APlantActor::InitializePlant(FName PlantSpeciesID, AHydroponicsContainer* Container)
+void APlantActor::InitializePlant(FName lantSpeciesID, AHydroponicsContainer* Container)
 {
 	this->PlantSpeciesID = PlantSpeciesID;
 	this->ParentContainer = Container;
 	
-	const FPlantSpeciesData* PlantData = GetPlantData();
+	const FPlantSpeciesData* PlantData = (GameInstance ? GameInstance->GetPlantData(PlantSpeciesID) : nullptr);
 	if (PlantData)
 	{
 		MaxHealthPoints = 100.0f; // Base health
@@ -115,7 +115,7 @@ int32 APlantActor::Harvest()
 		return 0;
 	}
 	
-	const FPlantSpeciesData* PlantData = GetPlantData();
+	const FPlantSpeciesData* PlantData = (GameInstance ? GameInstance->GetPlantData(PlantSpeciesID) : nullptr);
 	if (!PlantData)
 	{
 		return 0;
@@ -166,13 +166,18 @@ float APlantActor::GetHealthPercentage() const
 	return (HealthPoints / MaxHealthPoints) * 100.0f;
 }
 
-const FPlantSpeciesData* APlantActor::GetPlantData() const
+FPlantSpeciesData APlantActor::GetPlantData() const
 {
 	if (GameInstance)
 	{
-		return GameInstance->GetPlantData(PlantSpeciesID);
+		const FPlantSpeciesData* PlantDataPtr = GameInstance->GetPlantData(PlantSpeciesID);
+		if (PlantDataPtr)
+		{
+			return *PlantDataPtr;
+		}
 	}
-	return nullptr;
+	// Return default/empty plant data if not found
+	return FPlantSpeciesData();
 }
 
 void APlantActor::SetEnvironmentalConditions(const FEnvironmentalConditions& Conditions)
@@ -182,7 +187,7 @@ void APlantActor::SetEnvironmentalConditions(const FEnvironmentalConditions& Con
 
 void APlantActor::UpdateGrowthProgress(float DeltaTime)
 {
-	const FPlantSpeciesData* PlantData = GetPlantData();
+	const FPlantSpeciesData* PlantData = (GameInstance ? GameInstance->GetPlantData(PlantSpeciesID) : nullptr);
 	if (!PlantData)
 	{
 		return;
@@ -271,7 +276,7 @@ void APlantActor::UpdateHealthPoints(float DeltaTime)
 
 void APlantActor::CalculateGrowthFactors()
 {
-	const FPlantSpeciesData* PlantData = GetPlantData();
+	const FPlantSpeciesData* PlantData = (GameInstance ? GameInstance->GetPlantData(PlantSpeciesID) : nullptr);
 	if (!PlantData)
 	{
 		return;
@@ -392,7 +397,7 @@ float APlantActor::CalculateTemperatureEffect(float CurrentTemp, const FVector2D
 }
 
 // Network function implementations
-void APlantActor::ServerHarvestPlant_Implementation(const FString& PlayerName)
+void APlantActor::Server_HarvestPlant_Implementation(const FString& PlayerName)
 {
 	if (CanHarvest())
 	{
@@ -401,37 +406,51 @@ void APlantActor::ServerHarvestPlant_Implementation(const FString& PlayerName)
 		LastActionTime = FDateTime::Now();
 		
 		// Broadcast to all clients
-		MulticastPlantHarvested(Yield, PlayerName);
+		Multicast_PlantHarvested(Yield, PlayerName);
 	}
 }
 
-void APlantActor::ServerWaterPlant_Implementation(float WaterAmount, const FString& PlayerName)
+bool APlantActor::Server_HarvestPlant_Validate(const FString& PlayerName)
+{
+	return true; // Add any validation logic if needed
+}
+
+void APlantActor::Server_WaterPlant_Implementation(float WaterAmount, const FString& PlayerName)
 {
 	WaterPlant(WaterAmount);
 	LastActionPlayer = PlayerName;
 	LastActionTime = FDateTime::Now();
 }
 
-void APlantActor::ServerApplyNutrients_Implementation(const FNutrientLevels& Nutrients, const FString& PlayerName)
+bool APlantActor::Server_WaterPlant_Validate(float WaterAmount, const FString& PlayerName)
+{
+	return WaterAmount > 0.0f; // Ensure positive water amount
+}
+
+void APlantActor::Server_ApplyNutrients_Implementation(const FNutrientLevels& Nutrients, const FString& PlayerName)
 {
 	ApplyNutrients(Nutrients);
 	LastActionPlayer = PlayerName;
 	LastActionTime = FDateTime::Now();
 }
+bool APlantActor::Server_ApplyNutrients_Validate(const FNutrientLevels& Nutrients, const FString& PlayerName)
+{
+	return Nutrients.IsValid(); // Ensure nutrient levels are valid
+}
 
-void APlantActor::MulticastPlantGrowthStageChanged_Implementation(EPlantGrowthStage NewStage)
+void APlantActor::Multicast_PlantGrowthStageChanged_Implementation(EPlantGrowthStage NewStage)
 {
 	UpdateVisualAppearance();
 	OnGrowthStageChanged.Broadcast(NewStage);
 }
 
-void APlantActor::MulticastPlantHarvested_Implementation(int32 Yield, const FString& PlayerName)
+void APlantActor::Multicast_PlantHarvested_Implementation(int32 Yield, const FString& PlayerName)
 {
 	OnPlantHarvested.Broadcast(Yield);
 	UE_LOG(LogTemp, Warning, TEXT("Plant harvested by %s: %d yield"), *PlayerName, Yield);
 }
 
-void APlantActor::MulticastPlantHealthChanged_Implementation(float NewHealth)
+void APlantActor::Multicast_PlantHealthChanged_Implementation(float NewHealth)
 {
 	UpdateVisualAppearance();
 }
@@ -439,12 +458,12 @@ void APlantActor::MulticastPlantHealthChanged_Implementation(float NewHealth)
 // Replication callbacks
 void APlantActor::OnRep_GrowthStage()
 {
-	MulticastPlantGrowthStageChanged(CurrentGrowthStage);
+	Multicast_PlantGrowthStageChanged(CurrentGrowthStage);
 }
 
 void APlantActor::OnRep_HealthPoints()
 {
-	MulticastPlantHealthChanged(HealthPoints);
+	Multicast_PlantHealthChanged(HealthPoints);
 }
 
 void APlantActor::OnRep_GrowthProgress()

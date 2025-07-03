@@ -147,7 +147,7 @@ bool AHydroGrowNetworkGameMode::KickPlayer(const FString& PlayerID, const FStrin
 				FString::Printf(TEXT("%s was removed from the garden"), *PlayerData->PlayerName), true);
 			
 			// Kick the player
-			GetGameSession()->KickPlayer(PC, FText::FromString(Reason));
+			//GetGameSession()->KickPlayer(PC, FText::FromString(Reason));
 			return true;
 		}
 	}
@@ -385,6 +385,56 @@ bool AHydroGrowNetworkGameMode::ValidatePlayerAction(const FString& PlayerID, EN
 	default:
 		return false;
 	}
+}
+
+bool AHydroGrowNetworkGameMode::HasPlayerPermission(const FString& PlayerID, const FString& PermissionName) const
+{
+	const FNetworkPlayerData* PlayerData = ConnectedPlayers.Find(PlayerID);
+	if (!PlayerData)
+	{
+		return false;
+	}
+	
+	const FPlayerPermissions& Permissions = PlayerData->Permissions;
+	
+	if (PermissionName == TEXT("bCanPlantSeeds"))
+	{
+		return Permissions.bCanPlantSeeds;
+	}
+	else if (PermissionName == TEXT("bCanHarvestPlants"))
+	{
+		return Permissions.bCanHarvestPlants;
+	}
+	else if (PermissionName == TEXT("bCanAdjustEnvironment"))
+	{
+		return Permissions.bCanAdjustEnvironment;
+	}
+	else if (PermissionName == TEXT("bCanAddNutrients"))
+	{
+		return Permissions.bCanAddNutrients;
+	}
+	else if (PermissionName == TEXT("bCanOperateEquipment"))
+	{
+		return Permissions.bCanOperateEquipment;
+	}
+	else if (PermissionName == TEXT("bCanPurchaseEquipment"))
+	{
+		return Permissions.bCanPurchaseEquipment;
+	}
+	else if (PermissionName == TEXT("bCanSellProduce"))
+	{
+		return Permissions.bCanSellProduce;
+	}
+	else if (PermissionName == TEXT("bCanManagePermissions"))
+	{
+		return Permissions.bCanManagePermissions;
+	}
+	else if (PermissionName == TEXT("bCanKickPlayers"))
+	{
+		return Permissions.bCanKickPlayers;
+	}
+	
+	return false;
 }
 
 void AHydroGrowNetworkGameMode::AutoSaveSession()

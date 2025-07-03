@@ -17,7 +17,10 @@ public class HydroGrowSimulator : ModuleRules
 			"SlateCore",
 			"EnhancedInput",
 			"ProceduralMeshComponent",
-			"GameplayTags"
+			"GameplayTags",
+			"NetCore",
+			"OnlineSubsystem",
+			"OnlineSubsystemUtils"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] 

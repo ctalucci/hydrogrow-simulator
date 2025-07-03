@@ -4,7 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "Core/HydroGrowTypes.h"
 #include "Network/HydroGrowNetworkTypes.h"
-#include "Components/ProceduralMeshComponent.h"
+#include "ProceduralMeshComponent.h"
 #include "PlantActor.generated.h"
 
 class UHydroGrowGameInstance;
@@ -41,13 +41,32 @@ public:
 	void ApplyNutrients(const FNutrientLevels& Nutrients);
 
 	// Network functions
-	HYDROGROW_REPLICATE_FUNCTION_PARAMS(HarvestPlant, const FString&, PlayerName)
-	HYDROGROW_REPLICATE_FUNCTION_PARAMS(WaterPlant, float, WaterAmount, const FString&, PlayerName)
-	HYDROGROW_REPLICATE_FUNCTION_PARAMS(ApplyNutrients, const FNutrientLevels&, Nutrients, const FString&, PlayerName)
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_HarvestPlant(const FString& PlayerName);
+	bool Server_HarvestPlant_Validate(const FString& PlayerName);
+	void Server_HarvestPlant_Implementation(const FString& PlayerName);
+	
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_WaterPlant(float WaterAmount, const FString& PlayerName);
+	bool Server_WaterPlant_Validate(float WaterAmount, const FString& PlayerName);
+	void Server_WaterPlant_Implementation(float WaterAmount, const FString& PlayerName);
+	
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_ApplyNutrients(const FNutrientLevels& Nutrients, const FString& PlayerName);
+	bool Server_ApplyNutrients_Validate(const FNutrientLevels& Nutrients, const FString& PlayerName);
+	void Server_ApplyNutrients_Implementation(const FNutrientLevels& Nutrients, const FString& PlayerName);
 
-	HYDROGROW_MULTICAST_FUNCTION_PARAMS(PlantGrowthStageChanged, EPlantGrowthStage, NewStage)
-	HYDROGROW_MULTICAST_FUNCTION_PARAMS(PlantHarvested, int32, Yield, const FString&, PlayerName)
-	HYDROGROW_MULTICAST_FUNCTION_PARAMS(PlantHealthChanged, float, NewHealth)
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlantGrowthStageChanged(EPlantGrowthStage NewStage);
+	void Multicast_PlantGrowthStageChanged_Implementation(EPlantGrowthStage NewStage);
+	
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlantHarvested(int32 Yield, const FString& PlayerName);
+	void Multicast_PlantHarvested_Implementation(int32 Yield, const FString& PlayerName);
+	
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlantHealthChanged(float NewHealth);
+	void Multicast_PlantHealthChanged_Implementation(float NewHealth);
 
 	UFUNCTION(BlueprintPure, Category = "Plant")
 	float GetGrowthPercentage() const;
@@ -62,7 +81,7 @@ public:
 	FName GetPlantSpeciesID() const { return PlantSpeciesID; }
 
 	UFUNCTION(BlueprintPure, Category = "Plant")
-	const FPlantSpeciesData* GetPlantData() const;
+	FPlantSpeciesData GetPlantData() const;
 
 	UFUNCTION(BlueprintPure, Category = "Plant")
 	bool IsAlive() const { return CurrentGrowthStage != EPlantGrowthStage::Dead; }

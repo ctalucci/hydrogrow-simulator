@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "Core/HydroGrowGameMode.h"
 #include "Network/HydroGrowNetworkTypes.h"
-#include "Engine/GameSession.h"
 #include "HydroGrowNetworkGameMode.generated.h"
 
 class AHydroGrowNetworkGameState;
@@ -55,6 +54,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Network Management")
 	FNetworkPlayerData GetPlayerData(const FString& PlayerID) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Network Management")
+	bool HasPlayerPermission(const FString& PlayerID, const FString& PermissionName) const;
 
 protected:
 	// Network configuration

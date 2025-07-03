@@ -28,6 +28,16 @@ enum class ENetworkAction : uint8
 	ManagePermissions	UMETA(DisplayName = "Manage Permissions")
 };
 
+UENUM(BlueprintType)
+enum class EContainerPermission : uint8
+{
+	PlantSeeds			UMETA(DisplayName = "Plant Seeds"),
+	HarvestPlants		UMETA(DisplayName = "Harvest Plants"),
+	AdjustEnvironment	UMETA(DisplayName = "Adjust Environment"),
+	AddNutrients		UMETA(DisplayName = "Add Nutrients"),
+	OperateEquipment	UMETA(DisplayName = "Operate Equipment")
+};
+
 USTRUCT(BlueprintType)
 struct FPlayerPermissions
 {
@@ -41,6 +51,12 @@ struct FPlayerPermissions
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Permissions")
 	bool bCanAdjustEnvironment;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Permissions")
+	bool bCanAddNutrients;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Permissions")
+	bool bCanOperateEquipment;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Permissions")
 	bool bCanPurchaseEquipment;
@@ -59,6 +75,8 @@ struct FPlayerPermissions
 		bCanPlantSeeds = true;
 		bCanHarvestPlants = true;
 		bCanAdjustEnvironment = false;
+		bCanAddNutrients = false;
+		bCanOperateEquipment = false;
 		bCanPurchaseEquipment = false;
 		bCanSellProduce = false;
 		bCanManagePermissions = false;
@@ -71,6 +89,8 @@ struct FPlayerPermissions
 		Permissions.bCanPlantSeeds = true;
 		Permissions.bCanHarvestPlants = true;
 		Permissions.bCanAdjustEnvironment = true;
+		Permissions.bCanAddNutrients = true;
+		Permissions.bCanOperateEquipment = true;
 		Permissions.bCanPurchaseEquipment = true;
 		Permissions.bCanSellProduce = true;
 		Permissions.bCanManagePermissions = true;
@@ -84,6 +104,8 @@ struct FPlayerPermissions
 		Permissions.bCanPlantSeeds = true;
 		Permissions.bCanHarvestPlants = true;
 		Permissions.bCanAdjustEnvironment = true;
+		Permissions.bCanAddNutrients = true;
+		Permissions.bCanOperateEquipment = true;
 		Permissions.bCanPurchaseEquipment = true;
 		Permissions.bCanSellProduce = true;
 		Permissions.bCanManagePermissions = false;
@@ -97,6 +119,8 @@ struct FPlayerPermissions
 		Permissions.bCanPlantSeeds = true;
 		Permissions.bCanHarvestPlants = true;
 		Permissions.bCanAdjustEnvironment = false;
+		Permissions.bCanAddNutrients = true;
+		Permissions.bCanOperateEquipment = false;
 		Permissions.bCanPurchaseEquipment = false;
 		Permissions.bCanSellProduce = false;
 		Permissions.bCanManagePermissions = false;
@@ -110,6 +134,8 @@ struct FPlayerPermissions
 		Permissions.bCanPlantSeeds = false;
 		Permissions.bCanHarvestPlants = false;
 		Permissions.bCanAdjustEnvironment = false;
+		Permissions.bCanAddNutrients = false;
+		Permissions.bCanOperateEquipment = false;
 		Permissions.bCanPurchaseEquipment = false;
 		Permissions.bCanSellProduce = false;
 		Permissions.bCanManagePermissions = false;
@@ -229,26 +255,7 @@ struct FNetworkChatMessage
 	}
 };
 
-// Network replication helper macros
-#define HYDROGROW_REPLICATE_FUNCTION(FunctionName) \
-	UFUNCTION(Server, Reliable, WithValidation) \
-	void Server##FunctionName(); \
-	bool Server##FunctionName##_Validate() { return true; } \
-	void Server##FunctionName##_Implementation();
-
-#define HYDROGROW_REPLICATE_FUNCTION_PARAMS(FunctionName, ...) \
-	UFUNCTION(Server, Reliable, WithValidation) \
-	void Server##FunctionName(__VA_ARGS__); \
-	bool Server##FunctionName##_Validate(__VA_ARGS__) { return true; } \
-	void Server##FunctionName##_Implementation(__VA_ARGS__);
-
-#define HYDROGROW_MULTICAST_FUNCTION(FunctionName) \
-	UFUNCTION(NetMulticast, Reliable) \
-	void Multicast##FunctionName();
-
-#define HYDROGROW_MULTICAST_FUNCTION_PARAMS(FunctionName, ...) \
-	UFUNCTION(NetMulticast, Reliable) \
-	void Multicast##FunctionName(__VA_ARGS__);
+// Network functions are now defined using standard UE5 RPC syntax directly in the class headers
 
 // Delegates for multiplayer events
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerJoined, const FNetworkPlayerData&, PlayerData);

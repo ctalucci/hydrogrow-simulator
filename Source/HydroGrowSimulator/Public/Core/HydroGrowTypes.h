@@ -199,6 +199,12 @@ struct FNutrientLevels
 		Manganese = 1.0f;
 		Zinc = 1.0f;
 	}
+	bool IsValid() const
+	{
+		return Nitrogen >= 0 && Phosphorus >= 0 && Potassium >= 0 &&
+			   Calcium >= 0 && Magnesium >= 0 && Sulfur >= 0 &&
+			   Iron >= 0 && Manganese >= 0 && Zinc >= 0;
+	}
 };
 
 USTRUCT(BlueprintType)
@@ -243,6 +249,11 @@ struct FEquipmentData : public FTableRowBase
 		PurchaseCost = 100;
 		MaintenanceCost = 5;
 		UnlockLevel = 1;
+	}
+
+	bool Isvalid() const
+	{
+		return EquipmentType != EEquipmentType::None && PurchaseCost > 0 && MaintenanceCost >= 0;
 	}
 };
 

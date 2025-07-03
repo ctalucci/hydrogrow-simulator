@@ -32,7 +32,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Network Player")
 	bool HasPermission(ENetworkAction ActionType) const;
 
-	UFUNCTION(BlueprintCallable, Category = "Network Player", CallInEditor = true)
+	UFUNCTION(BlueprintCallable, Category = "Network Player")
 	void SetPlayerRole(EPlayerRole NewRole);
 
 	UFUNCTION(BlueprintCallable, Category = "Network Player")
