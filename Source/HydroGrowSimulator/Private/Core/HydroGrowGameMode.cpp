@@ -1,5 +1,6 @@
 #include "Core/HydroGrowGameMode.h"
 #include "Core/HydroGrowPlayerController.h"
+#include "Player/HydroGrowCharacter.h"
 #include "Core/HydroGrowGameInstance.h"
 #include "Systems/TimeManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -10,6 +11,7 @@ AHydroGrowGameMode::AHydroGrowGameMode()
 	PrimaryActorTick.bCanEverTick = true;
 	
 	PlayerControllerClass = AHydroGrowPlayerController::StaticClass();
+	DefaultPawnClass = AHydroGrowCharacter::StaticClass();
 	
 	// Default values
 	PlayerLevel = 1;

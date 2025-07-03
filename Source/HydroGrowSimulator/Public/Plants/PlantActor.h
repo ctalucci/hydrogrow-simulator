@@ -11,6 +11,7 @@ class UHydroGrowGameInstance;
 class AHydroponicsContainer;
 class UTimeManager;
 
+
 UCLASS()
 class HYDROGROWSIMULATOR_API APlantActor : public AActor
 {
@@ -29,7 +30,7 @@ public:
 	void InitializePlant(FName PlantSpeciesID, AHydroponicsContainer* Container);
 
 	UFUNCTION(BlueprintCallable, Category = "Plant")
-	bool CanHarvest() const;
+	bool CanBeHarvested() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Plant")
 	int32 Harvest();
@@ -39,6 +40,15 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Plant")
 	void ApplyNutrients(const FNutrientLevels& Nutrients);
+
+	UFUNCTION(BlueprintCallable, Category = "Plant")
+	bool CanHarvestPlant() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Plant")
+	int32 HarvestPlant(const FString& PlayerName = TEXT(""));
+
+	UFUNCTION(BlueprintCallable, Category = "Plant")
+	void UpdateVisualAppearance();
 
 	// Network functions
 	UFUNCTION(Server, Reliable, WithValidation)
@@ -178,7 +188,7 @@ private:
 	void UpdateGrowthStage();
 	void UpdateHealthPoints(float DeltaTime);
 	void CalculateGrowthFactors();
-	void UpdateVisualAppearance();
+	void UpdateVisualAppearanceInternal();
 	void CheckForProblems();
 
 	float CalculatePHEffect(float CurrentPH, const FVector2D& OptimalRange) const;

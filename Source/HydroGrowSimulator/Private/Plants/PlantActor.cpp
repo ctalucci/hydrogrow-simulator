@@ -51,7 +51,7 @@ void APlantActor::BeginPlay()
 	LastActionTime = FDateTime::Now();
 	LastActionPlayer = TEXT("System");
 	
-	UpdateVisualAppearance();
+	UpdateVisualAppearanceInternal();
 }
 
 void APlantActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -100,17 +100,22 @@ void APlantActor::InitializePlant(FName lantSpeciesID, AHydroponicsContainer* Co
 		UE_LOG(LogTemp, Error, TEXT("Failed to find plant data for ID: %s"), *PlantSpeciesID.ToString());
 	}
 	
-	UpdateVisualAppearance();
+	UpdateVisualAppearanceInternal();
 }
 
-bool APlantActor::CanHarvest() const
+bool APlantActor::CanBeHarvested() const
 {
 	return CurrentGrowthStage == EPlantGrowthStage::Harvest && IsAlive();
 }
 
+bool APlantActor::CanHarvestPlant() const
+{
+	return CanBeHarvested();
+}
+
 int32 APlantActor::Harvest()
 {
-	if (!CanHarvest())
+	if (!CanHarvestPlant())
 	{
 		return 0;
 	}
@@ -136,6 +141,20 @@ int32 APlantActor::Harvest()
 	Destroy();
 	
 	return FinalYield;
+}
+
+int32 APlantActor::HarvestPlant(const FString& PlayerName)
+{
+	if (HasAuthority())
+	{
+		return Harvest();
+	}
+	else
+	{
+		// On client, send server request
+		Server_HarvestPlant(PlayerName);
+		return 0; // Return 0 for now, server will handle the actual harvest
+	}
 }
 
 void APlantActor::WaterPlant(float WaterAmount)
@@ -240,7 +259,7 @@ void APlantActor::UpdateGrowthStage()
 	{
 		CurrentGrowthStage = NewStage;
 		OnGrowthStageChanged.Broadcast(CurrentGrowthStage);
-		UpdateVisualAppearance();
+		UpdateVisualAppearanceInternal();
 		
 		UE_LOG(LogTemp, Warning, TEXT("Plant growth stage changed to: %d"), (int32)CurrentGrowthStage);
 	}
@@ -269,7 +288,7 @@ void APlantActor::UpdateHealthPoints(float DeltaTime)
 	if (HealthPoints <= 0.0f)
 	{
 		CurrentGrowthStage = EPlantGrowthStage::Dead;
-		UpdateVisualAppearance();
+		UpdateVisualAppearanceInternal();
 		UE_LOG(LogTemp, Warning, TEXT("Plant has died"));
 	}
 }
@@ -294,6 +313,11 @@ void APlantActor::CalculateGrowthFactors()
 }
 
 void APlantActor::UpdateVisualAppearance()
+{
+	UpdateVisualAppearanceInternal();
+}
+
+void APlantActor::UpdateVisualAppearanceInternal()
 {
 	// Update plant mesh based on growth stage and health
 	// This would be implemented with actual mesh swapping or procedural generation
@@ -399,7 +423,7 @@ float APlantActor::CalculateTemperatureEffect(float CurrentTemp, const FVector2D
 // Network function implementations
 void APlantActor::Server_HarvestPlant_Implementation(const FString& PlayerName)
 {
-	if (CanHarvest())
+	if (CanHarvestPlant())
 	{
 		int32 Yield = Harvest();
 		LastActionPlayer = PlayerName;
@@ -440,7 +464,7 @@ bool APlantActor::Server_ApplyNutrients_Validate(const FNutrientLevels& Nutrient
 
 void APlantActor::Multicast_PlantGrowthStageChanged_Implementation(EPlantGrowthStage NewStage)
 {
-	UpdateVisualAppearance();
+	UpdateVisualAppearanceInternal();
 	OnGrowthStageChanged.Broadcast(NewStage);
 }
 
@@ -452,7 +476,7 @@ void APlantActor::Multicast_PlantHarvested_Implementation(int32 Yield, const FSt
 
 void APlantActor::Multicast_PlantHealthChanged_Implementation(float NewHealth)
 {
-	UpdateVisualAppearance();
+	UpdateVisualAppearanceInternal();
 }
 
 // Replication callbacks
@@ -468,5 +492,5 @@ void APlantActor::OnRep_HealthPoints()
 
 void APlantActor::OnRep_GrowthProgress()
 {
-	UpdateVisualAppearance();
+	UpdateVisualAppearanceInternal();
 }
