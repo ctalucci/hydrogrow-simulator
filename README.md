@@ -36,7 +36,7 @@ Architecture, systems design, and UE5 implementation details.
 
 ### Installation
 ```bash
-git clone https://github.com/yourusername/hydrogrow-simulator.git
+git clone https://github.com/ctalucci/hydrogrow-simulator.git
 cd hydrogrow-simulator
 git lfs pull
 # Right-click HydroGrowSimulator.uproject and select "Generate Visual Studio project files"

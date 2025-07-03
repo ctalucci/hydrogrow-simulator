@@ -15,12 +15,18 @@ public class HydroGrowSimulator : ModuleRules
 			"UMG",
 			"Slate",
 			"SlateCore",
-			"EnhancedInput"
+			"EnhancedInput",
+			"ProceduralMeshComponent",
+			"GameplayTags"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] 
 		{
-			"ToolMenus"
+			"ToolMenus",
+			"RenderCore",
+			"RHI",
+			"NavigationSystem",
+			"AIModule"
 		});
 	}
 }
