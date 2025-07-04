@@ -5,7 +5,6 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "Components/SkeletalMeshComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
@@ -21,13 +20,17 @@ class UInteractionComponent;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInteractionFound, AActor*, InteractableActor);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInteractionLost);
 
-UCLASS()
+UCLASS(config=Game, BlueprintType, meta=(ShortTooltip="A character for our hyrdoponics game."))
 class HYDROGROWSIMULATOR_API AHydroGrowCharacter : public ACharacter
 {
 	GENERATED_BODY()
 
 public:
 	AHydroGrowCharacter();
+
+	// Character functionality
+	UFUNCTION(BlueprintCallable, Category = "Character")
+	void SetPlayerName(const FString& NewName);
 
 protected:
 	virtual void BeginPlay() override;
@@ -62,14 +65,10 @@ protected:
 
 	// Camera and Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
-	UCameraComponent* FirstPersonCamera;
+	UCameraComponent* ThirdPersonCamera;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	USceneComponent* CameraRoot;
-
-	// Character Mesh (First Person Arms)
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mesh")
-	USkeletalMeshComponent* FirstPersonMesh;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Interaction")
 	UInteractionComponent* InteractionComponent;
@@ -115,10 +114,6 @@ protected:
 	void ToggleCrouch();
 	void Interact();
 	void OpenInventory();
-
-	// Character functionality
-	UFUNCTION(BlueprintCallable, Category = "Character")
-	void SetPlayerName(const FString& NewName);
 
 	UFUNCTION(BlueprintCallable, Category = "Character")
 	void AddExperience(float Amount);
@@ -198,10 +193,7 @@ public:
 	AActor* GetCurrentInteractable() const { return CurrentInteractable; }
 
 	UFUNCTION(BlueprintPure, Category = "Camera")
-	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCamera; }
-
-	UFUNCTION(BlueprintPure, Category = "Mesh")
-	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }
+	UCameraComponent* GetThirdPersonCameraComponent() const { return ThirdPersonCamera; }
 
 private:
 	// Internal state

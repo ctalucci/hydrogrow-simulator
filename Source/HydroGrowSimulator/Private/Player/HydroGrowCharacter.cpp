@@ -10,7 +10,6 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "Components/SkeletalMeshComponent.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 #include "Kismet/GameplayStatics.h"
@@ -34,7 +33,7 @@ AHydroGrowCharacter::AHydroGrowCharacter()
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.0f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 
-	// Don't rotate when the controller rotates for first person
+	// Don't rotate when the controller rotates. Let the character movement handle rotation
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
@@ -44,22 +43,13 @@ AHydroGrowCharacter::AHydroGrowCharacter()
 	CameraRoot->SetupAttachment(RootComponent);
 	CameraRoot->SetRelativeLocation(FVector(0.0f, 0.0f, 64.0f)); // Eye height
 
-	// Create first person camera
-	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
-	FirstPersonCamera->SetupAttachment(CameraRoot);
-	FirstPersonCamera->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
-	FirstPersonCamera->bUsePawnControlRotation = true;
+	// Create third person camera
+	ThirdPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("ThirdPersonCamera"));
+	ThirdPersonCamera->SetupAttachment(CameraRoot);
+	ThirdPersonCamera->SetRelativeLocation(FVector(-300.0f, 0.0f, 75.0f)); // Behind and above character
+	ThirdPersonCamera->bUsePawnControlRotation = true;
 
-	// Create first person mesh (arms)
-	FirstPersonMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FirstPersonMesh"));
-	FirstPersonMesh->SetupAttachment(FirstPersonCamera);
-	FirstPersonMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -160.0f));
-	FirstPersonMesh->SetOnlyOwnerSee(true);
-	FirstPersonMesh->bCastDynamicShadow = false;
-	FirstPersonMesh->CastShadow = false;
-
-	// Configure the default mesh to be seen by others but not owner
-	GetMesh()->SetOwnerNoSee(true);
+	// Configure the character mesh
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -90.0f));
 	GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
 
@@ -330,8 +320,8 @@ void AHydroGrowCharacter::FindInteractables()
 	}
 
 	// Get camera location and forward vector for line trace
-	FVector CameraLocation = FirstPersonCamera->GetComponentLocation();
-	FVector CameraForward = FirstPersonCamera->GetForwardVector();
+	FVector CameraLocation = ThirdPersonCamera->GetComponentLocation();
+	FVector CameraForward = ThirdPersonCamera->GetForwardVector();
 	FVector TraceEnd = CameraLocation + (CameraForward * InteractionRange);
 
 	// Line trace for interactables
