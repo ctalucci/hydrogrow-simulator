@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameModeBase.h"
+#include "GameFramework/GameMode.h"
 #include "HydroGrowTypes.h"
 #include "HydroGrowGameMode.generated.h"
 
@@ -10,7 +10,7 @@ class AHydroGrowPlayerController;
 class UTimeManager;
 
 UCLASS()
-class HYDROGROWSIMULATOR_API AHydroGrowGameMode : public AGameModeBase
+class HYDROGROWSIMULATOR_API AHydroGrowGameMode : public AGameMode
 {
 	GENERATED_BODY()
 
