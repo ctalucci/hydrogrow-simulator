@@ -1,4 +1,5 @@
 #include "Plants/PlantActor.h"
+#include "Plants/PlantMeshConfigurator.h"
 #include "Core/HydroGrowGameInstance.h"
 #include "Systems/HydroponicsContainer.h"
 #include "Systems/TimeManager.h"
@@ -22,6 +23,10 @@ APlantActor::APlantActor()
 	PlantMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("PlantMesh"));
 	PlantMesh->SetupAttachment(RootComponent);
 
+	// Create static mesh component for Ultimate Farming Kit meshes
+	StaticPlantMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StaticPlantMesh"));
+	StaticPlantMesh->SetupAttachment(RootComponent);
+
 	PotMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PotMesh"));
 	PotMesh->SetupAttachment(RootComponent);
 
@@ -38,6 +43,12 @@ APlantActor::APlantActor()
 	LightEffectiveness = 1.0f;
 	TemperatureEffectiveness = 1.0f;
 	OverallGrowthRate = 1.0f;
+
+	// Default to not using static meshes
+	bUseStaticMeshes = false;
+
+	// Initially hide the static mesh
+	StaticPlantMesh->SetVisibility(false);
 }
 
 void APlantActor::BeginPlay()
@@ -317,28 +328,151 @@ void APlantActor::UpdateVisualAppearance()
 	UpdateVisualAppearanceInternal();
 }
 
+void APlantActor::ApplyMeshConfiguration(const FPlantMeshConfiguration& Config)
+{
+	// Enable static mesh mode
+	bUseStaticMeshes = true;
+
+	// Clear existing mesh array
+	GrowthStageMeshes.Empty();
+	GrowthStageMeshes.SetNum(5); // Make room for 5 growth stages
+
+	// Load and assign meshes
+	if (Config.StarterMesh.IsValid())
+	{
+		GrowthStageMeshes[0] = Config.StarterMesh.LoadSynchronous();
+	}
+	if (Config.StageAMesh.IsValid())
+	{
+		GrowthStageMeshes[1] = Config.StageAMesh.LoadSynchronous();
+	}
+	if (Config.StageBMesh.IsValid())
+	{
+		GrowthStageMeshes[2] = Config.StageBMesh.LoadSynchronous();
+	}
+	if (Config.StageCMesh.IsValid())
+	{
+		GrowthStageMeshes[3] = Config.StageCMesh.LoadSynchronous();
+	}
+	if (Config.FlowerMesh.IsValid())
+	{
+		GrowthStageMeshes[4] = Config.FlowerMesh.LoadSynchronous();
+	}
+
+	// Assign special state meshes
+	if (Config.HarvestedMesh.IsValid())
+	{
+		HarvestedMesh = Config.HarvestedMesh.LoadSynchronous();
+	}
+	if (Config.DeadMesh.IsValid())
+	{
+		DeadMesh = Config.DeadMesh.LoadSynchronous();
+	}
+
+	// Set the plant species ID if provided
+	if (Config.PlantSpeciesID != NAME_None)
+	{
+		PlantSpeciesID = Config.PlantSpeciesID;
+	}
+
+	// Update visual appearance with new meshes
+	UpdateVisualAppearance();
+
+	UE_LOG(LogTemp, Log, TEXT("Applied mesh configuration for plant: %s"), *Config.PlantDisplayName);
+}
+
 void APlantActor::UpdateVisualAppearanceInternal()
 {
-	// Update plant mesh based on growth stage and health
-	// This would be implemented with actual mesh swapping or procedural generation
+	// Calculate visual effects
+	FVector Scale = FVector::OneVector;
 	
-	if (PlantMesh)
+	// Scale based on growth progress
+	float GrowthScale = FMath::Lerp(0.1f, 1.0f, GrowthProgress);
+	Scale *= GrowthScale;
+	
+	// Reduce scale if unhealthy
+	float HealthScale = FMath::Lerp(0.7f, 1.0f, HealthPoints / MaxHealthPoints);
+	Scale *= HealthScale;
+	
+	if (bUseStaticMeshes && StaticPlantMesh)
 	{
-		FVector Scale = FVector::OneVector;
+		// Use Ultimate Farming Kit static meshes
+		PlantMesh->SetVisibility(false);
+		StaticPlantMesh->SetVisibility(true);
 		
-		// Scale based on growth progress
-		float GrowthScale = FMath::Lerp(0.1f, 1.0f, GrowthProgress);
-		Scale *= GrowthScale;
+		// Select appropriate mesh based on growth stage and health
+		UStaticMesh* SelectedMesh = GetMeshForCurrentState();
+		if (SelectedMesh && StaticPlantMesh->GetStaticMesh() != SelectedMesh)
+		{
+			StaticPlantMesh->SetStaticMesh(SelectedMesh);
+		}
 		
-		// Reduce scale if unhealthy
-		float HealthScale = FMath::Lerp(0.7f, 1.0f, HealthPoints / MaxHealthPoints);
-		Scale *= HealthScale;
+		StaticPlantMesh->SetWorldScale3D(Scale);
+	}
+	else if (PlantMesh)
+	{
+		// Use procedural mesh system
+		StaticPlantMesh->SetVisibility(false);
+		PlantMesh->SetVisibility(true);
 		
 		PlantMesh->SetWorldScale3D(Scale);
 		
 		// Change color based on health
 		// This would be implemented with material parameter changes
 	}
+}
+
+UStaticMesh* APlantActor::GetMeshForCurrentState() const
+{
+	// Handle special states first
+	if (CurrentGrowthStage == EPlantGrowthStage::Dead && DeadMesh)
+	{
+		return DeadMesh;
+	}
+	
+	if (CurrentGrowthStage == EPlantGrowthStage::Harvest && HarvestedMesh)
+	{
+		return HarvestedMesh;
+	}
+	
+	// Map growth stages to mesh array indices
+	int32 MeshIndex = 0;
+	switch (CurrentGrowthStage)
+	{
+		case EPlantGrowthStage::Seed:
+		case EPlantGrowthStage::Germination:
+			MeshIndex = 0; // Starter mesh
+			break;
+		case EPlantGrowthStage::Seedling:
+			MeshIndex = 1; // Small plant
+			break;
+		case EPlantGrowthStage::Vegetative:
+			MeshIndex = 2; // Medium plant
+			break;
+		case EPlantGrowthStage::Flowering:
+			MeshIndex = 3; // Large plant with flowers
+			break;
+		case EPlantGrowthStage::Harvest:
+			MeshIndex = 4; // Fully grown with fruit
+			break;
+		default:
+			MeshIndex = 0;
+			break;
+	}
+	
+	// Return mesh if available in array
+	if (GrowthStageMeshes.IsValidIndex(MeshIndex) && GrowthStageMeshes[MeshIndex])
+	{
+		return GrowthStageMeshes[MeshIndex];
+	}
+	
+	// Fallback to first available mesh
+	if (GrowthStageMeshes.Num() > 0 && GrowthStageMeshes[0])
+	{
+		return GrowthStageMeshes[0];
+	}
+	
+	return nullptr;
 }
 
 void APlantActor::CheckForProblems()

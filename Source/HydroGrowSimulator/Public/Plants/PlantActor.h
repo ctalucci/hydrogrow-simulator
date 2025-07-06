@@ -5,11 +5,13 @@
 #include "Core/HydroGrowTypes.h"
 #include "Network/HydroGrowNetworkTypes.h"
 #include "ProceduralMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "PlantActor.generated.h"
 
 class UHydroGrowGameInstance;
 class AHydroponicsContainer;
 class UTimeManager;
+struct FPlantMeshConfiguration;
 
 
 UCLASS()
@@ -49,6 +51,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Plant")
 	void UpdateVisualAppearance();
+
+	// Apply Ultimate Farming Kit mesh configuration
+	UFUNCTION(BlueprintCallable, Category = "Plant Meshes")
+	void ApplyMeshConfiguration(const FPlantMeshConfiguration& Config);
 
 	// Network functions
 	UFUNCTION(Server, Reliable, WithValidation)
@@ -110,8 +116,26 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UProceduralMeshComponent* PlantMesh;
 
+	// Static mesh component for Ultimate Farming Kit meshes
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UStaticMeshComponent* StaticPlantMesh;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UStaticMeshComponent* PotMesh;
+
+	// Mesh arrays for different growth stages
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Plant Meshes")
+	TArray<UStaticMesh*> GrowthStageMeshes;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Plant Meshes")
+	UStaticMesh* HarvestedMesh;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Plant Meshes")
+	UStaticMesh* DeadMesh;
+
+	// Option to use static meshes instead of procedural
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Plant Meshes")
+	bool bUseStaticMeshes;
 
 	// Plant Data
 	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Plant Data")
@@ -190,6 +214,9 @@ private:
 	void CalculateGrowthFactors();
 	void UpdateVisualAppearanceInternal();
 	void CheckForProblems();
+	
+	// Static mesh selection helper
+	UStaticMesh* GetMeshForCurrentState() const;
 
 	float CalculatePHEffect(float CurrentPH, const FVector2D& OptimalRange) const;
 	float CalculateNutrientEffect(float CurrentEC, const FVector2D& OptimalRange) const;
