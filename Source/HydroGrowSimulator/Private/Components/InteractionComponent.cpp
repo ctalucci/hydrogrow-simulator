@@ -233,7 +233,7 @@ AActor* UInteractionComponent::FindBestInteractable()
 	float BestScore = -1.0f;
 	
 	FVector CharacterLocation = OwnerCharacter->GetActorLocation();
-	FVector CameraForward = OwnerCharacter->GetFirstPersonCameraComponent()->GetForwardVector();
+	FVector CameraForward = OwnerCharacter->GetMesh()->GetForwardVector();
 	
 	for (AActor* Actor : NearbyInteractables)
 	{
@@ -269,7 +269,7 @@ bool UInteractionComponent::IsActorInInteractionCone(AActor* Actor) const
 	}
 	
 	FVector CharacterLocation = OwnerCharacter->GetActorLocation();
-	FVector CameraForward = OwnerCharacter->GetFirstPersonCameraComponent()->GetForwardVector();
+	FVector CameraForward = OwnerCharacter->GetMesh()->GetForwardVector();
 	FVector ToActor = (Actor->GetActorLocation() - CharacterLocation).GetSafeNormal();
 	
 	float DotProduct = FVector::DotProduct(CameraForward, ToActor);
@@ -286,7 +286,7 @@ bool UInteractionComponent::HasLineOfSightToActor(AActor* Actor) const
 		return false;
 	}
 	
-	FVector StartLocation = OwnerCharacter->GetFirstPersonCameraComponent()->GetComponentLocation();
+	FVector StartLocation = OwnerCharacter->GetMesh()->GetComponentLocation();
 	FVector EndLocation = Actor->GetActorLocation();
 	
 	FHitResult HitResult;

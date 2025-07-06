@@ -78,7 +78,7 @@ public:
 	TArray<FName> GetAvailablePlantSpecies() const;
 
 	// Create preset configurations for common Ultimate Farming Kit plants
-	UFUNCTION(CallInEditor = true, Category = "Plant Mesh")
+	UFUNCTION(BlueprintCallable, Category = "Plant Mesh")
 	void CreatePresetConfigurations();
 
 protected:
